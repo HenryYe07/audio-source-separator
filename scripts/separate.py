@@ -14,6 +14,7 @@ import resource
 from setup import ROOT, bootstrap, device_status, lock
 from model_manager import MODELS, CACHE, ensure_model
 from validate_audio import probe, validate
+from audio_format import FORMATS, output_spec, encode
 
 EXTENSIONS = {'.wav', '.flac', '.mp3', '.m4a', '.aiff', '.aif'}
 
@@ -103,8 +104,6 @@ def worker(key, source, output, device):
                 sources['vocals'] = mix - sources['instrumental']
             for stem, out in outputs.items():
                 result = sources[stem][:, start-left:stop-left].T
-                if result.shape != (stop-start, 2) or not np.isfinite(result).all():
-                    raise RuntimeError(f'{stem} 推理长度异常或出现 NaN/Inf')
                 out.write(result)
             del sources, mix
             gc.collect()
@@ -125,8 +124,9 @@ def reserve(base):
             continue
     raise RuntimeError('无法分配无冲突的输出目录')
 
-def process(source, key, base, requested_device):
+def process(source, key, base, requested_device, output_format='source'):
     info = probe(source)
+    spec = output_spec(source, info, output_format)
     if info['channels'] not in (1, 2):
         raise ValueError('当前模型仅可靠支持单声道和立体声；多声道输入需要另行确认转换。')
     if not 8000 <= info['sample_rate'] <= 384000 or info['duration'] <= 0:
@@ -136,7 +136,7 @@ def process(source, key, base, requested_device):
     device = status['device'] if requested_device == 'auto' else requested_device
     if device == 'mps' and not status['mps_available']:
         raise RuntimeError(status['reason'])
-    notices = []
+    notices = list(spec['notices'])
     if requested_device == 'auto' and device == 'cpu':
         notices.append(status['reason'])
     if info['sample_rate'] != 44100:
@@ -168,12 +168,14 @@ def process(source, key, base, requested_device):
             staged.mkdir()
             checks = {}
             for stem in ('instrumental', 'vocals'):
-                target = staged / f'{stem}.wav'
-                ffmpeg(raw / f'{stem}.wav', target, info['sample_rate'], info['channels'])
-                checks[stem] = validate(target, info)
+                target = staged / f'{stem}.{spec["extension"]}'
+                encode(raw / f'{stem}.wav', target, spec)
+                checks[stem] = validate(target)
             report = {'success': True, 'model': MODELS[key]['name'], 'device': device,
                 'input': str(source), 'output': str(destination), 'notices': notices, 'validation': checks,
-                'runtime': json.loads((raw / 'metrics.json').read_text())}
+                'runtime': json.loads((raw / 'metrics.json').read_text()),
+                'output_format': spec['format'],
+                'files': {stem: str(destination / f'{stem}.{spec["extension"]}') for stem in checks}}
             (staged / 'result.json').write_text(json.dumps(report, ensure_ascii=False, indent=2))
             # Publish both stems only after both decode and pass validation.
             for file in staged.iterdir():
@@ -181,7 +183,7 @@ def process(source, key, base, requested_device):
             return report
     except BaseException:
         # No partial stems are published on failure.
-        for name in ('instrumental.wav', 'vocals.wav', 'result.json'):
+        for name in (f'instrumental.{spec["extension"]}', f'vocals.{spec["extension"]}', 'result.json'):
             (destination / name).unlink(missing_ok=True)
         destination.rmdir()
         raise
@@ -197,6 +199,8 @@ def main():
     p.add_argument('--model', choices=['detail', 'clean', 'both'], help='明确指定模型，优先于 goal')
     p.add_argument('--output', type=Path, help='输出根目录')
     p.add_argument('--device', choices=['auto', 'mps', 'cpu'], default='auto')
+    p.add_argument('--format', choices=FORMATS, type=str.lower, default='source',
+                   help='输出格式，默认 source：沿用每个源文件的格式和可读取的音频参数')
     args = p.parse_args()
     try:
         keys = select_models(args.model, args.goal)
@@ -222,7 +226,7 @@ def main():
                     if len(keys) == 2:
                         base = base / key
                     try:
-                        print(json.dumps(process(file, key, base, args.device), ensure_ascii=False), flush=True)
+                        print(json.dumps(process(file, key, base, args.device, args.format), ensure_ascii=False), flush=True)
                     except Exception as exc:
                         failures += 1
                         print(json.dumps({'success': False, 'input': str(file), 'model': MODELS[key]['name'],

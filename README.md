@@ -1,6 +1,6 @@
 # audio-source-separator
 
-在 Apple Silicon Mac 上执行人声与伴奏双音轨分离的可执行 Skill。按扒谱或翻唱需求选择模型，默认输出无损 WAV。
+在 Apple Silicon Mac 上执行人声与伴奏双音轨分离的可执行 Skill。按扒谱或翻唱需求选择模型，询问输出格式，默认沿用源文件格式和可读取的音频参数。
 
 仅使用以下两个模型：
 
@@ -83,7 +83,7 @@ audio-source-separator/
 我要保留乐器细节的扒谱伴奏。
 ```
 
-也可以说“我要尽可能干净的翻唱伴奏”或“两个模型都处理一遍，我想对比”。只说“提取伴奏”时，Skill 会先询问更重视乐器完整度还是伴奏干净程度。
+也可以说“我要尽可能干净的翻唱伴奏”或“两个模型都处理一遍，我想对比”。只说“提取伴奏”时，Skill 会先询问更重视乐器完整度还是伴奏干净程度。未说明输出格式时会询问，提供“与源文件一致”作为默认选项；已明确格式则不再问。可以直接说“用于扒谱，格式和原文件一样”。
 
 直接用终端处理也可以；把示例音频路径换成实际路径：
 
@@ -99,22 +99,30 @@ python3.11 "$HOME/.agents/skills/audio-source-separator/scripts/separate.py" \
 # 两模型分别处理
 python3.11 "$HOME/.agents/skills/audio-source-separator/scripts/separate.py" \
   "/absolute/path/song.m4a" --model both
+
+# 明确需要 WAV 输出
+python3.11 "$HOME/.agents/skills/audio-source-separator/scripts/separate.py" \
+  "/absolute/path/song.mp3" --goal detail --format wav
 ```
 
-支持 WAV、FLAC、MP3、M4A、AIFF。多个文件可依次放在同一命令中；传入目录时批量处理其中直接包含的音频，不递归处理子目录。使用 `--output "/absolute/path/results"` 指定输出根目录。
+支持 WAV、FLAC、MP3、M4A、AIFF 输入和输出。命令行默认 `--format source` 沿用源格式，也可使用 `--format wav`、`--format flac`、`--format mp3`、`--format m4a` 或 `--format aiff`。命令行直接采用默认值；对话调用会先询问未指定的输出格式。多个文件可依次放在同一命令中；传入目录时批量处理其中直接包含的音频，不递归处理子目录。使用 `--output "/absolute/path/results"` 指定输出根目录。
 
-默认保存到原音频所在目录：
+默认保存到原音频所在目录；以 MP3 源文件为例：
 
 ```text
 output/song_name/
-  instrumental.wav
-  vocals.wav
+  instrumental.mp3
+  vocals.mp3
   result.json
 ```
 
 两个模型比较时分别保存在歌曲目录内的 `detail/`、`clean/`。同名或重复任务自动添加序号，避免覆盖。
 
-输出为 32-bit float WAV，并检查解码、时长、采样率、声道和异常空白。模型内部固定 44.1 kHz，其他输入采样率会在内部转换后恢复输出采样率；单声道输出仍为单声道。默认优先 MPS，设备异常时允许回退 CPU 并报告原因。
+默认沿用源采样率、声道及可读取的 PCM 位深或音频码率。MP3/AAC 输出需有损重新编码，尽量匹配源平均码率，无法完整复刻 VBR 控制和编码器私有参数；码率未知时默认 192 kbps。M4A 源为 ALAC 时继续使用 ALAC，FLAC 导出采用 16/24-bit。需要无损容器时可明确选择 WAV、FLAC 或 AIFF。
+
+模型内部固定 44.1 kHz，其他输入采样率会在内部转换后恢复输出采样率；单声道输出仍为单声道。默认优先 MPS，设备异常时允许回退 CPU 并报告原因。
+
+保留长音频分块推理以控制内存，**不做逐段核验**。整首最终编码后，只确认两条最终音轨存在且能正常解码播放；不检查质量、内容、静音、人声残留或与原曲的时长一致性，也不要求用户试听确认。
 
 ## ZIP 与 ChatGPT
 
