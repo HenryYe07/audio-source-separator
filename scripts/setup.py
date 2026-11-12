@@ -8,7 +8,6 @@ import platform
 import shutil
 import subprocess
 import sys
-import venv
 import fcntl
 import hashlib
 from contextlib import contextmanager

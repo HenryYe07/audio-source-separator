@@ -19,4 +19,8 @@ MPS 通过 PyTorch 实测检测；设置单进程 MPS 分配上限为推荐工�
 
 环境固定原生 Python 3.11、audio-separator[cpu] 0.48.0、PyTorch 2.13.0；cpu extra 安装的是 ONNX Runtime CPU 依赖，不会禁用 PyTorch MPS。上游包包含其他架构代码和依赖，但本工具不下载或调用其他模型。
 
+完整传递依赖固定在 `requirements-macos-arm64-py311.txt`，由本机成功安装环境导出。FFmpeg 已存在时直接复用；缺失时通过已有 Homebrew 自动安装，缺少 Homebrew 则明确报告无法完成自动安装。没有自动安装 Python 或 Homebrew，也不修改已有 UVR5。
+
 所有输出 FLOAT WAV 保留预测峰值而不额外限幅；超过 0 dBFS 的 float 样本可保留，播放或转整数 PCM 时应由用户决定增益。验证整段解码与形状/能量，不代表音乐音质评估。模型许可证和上游软件许可仍适用；安装包不重新分发模型权重或上游源码。
+
+Skill 目录与单顶层文件夹 ZIP 遵循 [OpenAI Agent Skills 打包文档](https://developers.openai.com/api/docs/guides/tools-skills)。这不代表已在某个 ChatGPT 账户验证导入，也不会将远程沙箱变成本机执行环境。

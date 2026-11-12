@@ -9,7 +9,6 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
-import traceback
 import time
 import resource
 from setup import ROOT, bootstrap, device_status, lock
@@ -164,7 +163,7 @@ def process(source, key, base, requested_device):
                         command[-1] = device
                         result = subprocess.run(command, stdout=stream, stderr=stream)
                 if result.returncode:
-                    raise RuntimeError('模型加载或推理失败：' + log.read_text()[-3000:])
+                    raise RuntimeError(f'模型加载或推理失败（退出码 {result.returncode}）：' + log.read_text()[-3000:])
             staged = temp / 'validated'
             staged.mkdir()
             checks = {}

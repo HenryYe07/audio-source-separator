@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 import sys
 import tempfile
+import subprocess
 import unittest
 from unittest.mock import patch
 import numpy as np
@@ -10,10 +11,44 @@ import soundfile as sf
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 import model_manager as mm
+import separate as separation
 from separate import select_models, reserve
 from validate_audio import validate
 
 class RuntimeTests(unittest.TestCase):
+    def test_device_failure_retries_cpu_in_new_worker(self):
+        original_run = subprocess.run
+        devices = []
+        def run(command, **kwargs):
+            if '--worker' not in command:
+                return original_run(command, **kwargs)
+            device = command[-1]
+            devices.append(device)
+            if device == 'mps':
+                kwargs['stderr'].write('MPS out of memory')
+                kwargs['stderr'].flush()
+                return subprocess.CompletedProcess(command, 1)
+            source, output = Path(command[-3]), Path(command[-2])
+            audio, rate = sf.read(source, always_2d=True)
+            for stem in ('instrumental', 'vocals'):
+                sf.write(output / f'{stem}.wav', audio*.5, rate, subtype='FLOAT')
+            (output / 'metrics.json').write_text('{}')
+            return subprocess.CompletedProcess(command, 0)
+        with tempfile.TemporaryDirectory() as directory:
+            directory = Path(directory)
+            source = directory / 'input.wav'
+            t = np.arange(44100)/44100
+            sf.write(source, .1*np.sin(2*np.pi*440*t), 44100)
+            with patch.object(separation, 'ensure_model'), \
+                    patch.object(separation, 'device_status', return_value={'device': 'mps', 'mps_available': True}), \
+                    patch.object(separation.subprocess, 'run', side_effect=run):
+                report = separation.process(source, 'detail', directory / 'result', 'auto')
+            self.assertEqual(devices, ['mps', 'cpu'])
+            self.assertTrue(report['success'])
+            self.assertEqual(report['device'], 'cpu')
+            self.assertTrue(any('回退 CPU' in notice for notice in report['notices']))
+            self.assertEqual(report['validation']['vocals']['channels'], 1)
+
     def test_preference_required_and_explicit_model_wins(self):
         with self.assertRaises(ValueError):
             select_models()
