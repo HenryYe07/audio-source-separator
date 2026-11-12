@@ -41,7 +41,9 @@ python3.11 "<skill>/scripts/separate.py" "/absolute/path/song1.flac" "/absolute/
 
 环境预检可运行 `python3.11 "<skill>/scripts/setup.py"`。FFmpeg 缺失且 Homebrew 可用时自动安装；没有 Homebrew 时报告缺失前提，要求先安装 FFmpeg。不修改系统 Python 或 UVR5。模型、虚拟环境和锁文件都属于本 Skill；移动文件夹后虚拟环境会在新位置自动重建，模型继续复用。
 
-按批次顺序处理，每个模型在独立子进程中加载与释放。自动优先 MPS；设备不可用或 MPS 推理失败时明确说明 CPU 回退及原因。读取脚本 JSON 的 `success`、`notices` 和 `validation`，退出码非零或任一失败项都不能报告全部成功。内部运行日志留在临时文件，不向用户粘贴长日志；失败时保留原因的简要说明。
+优先确保本机 GPU 可访问：预检不仅检测 MPS，还实际提交小型 GPU 矩阵运算，成功时 `mps_compute_verified=true`。若 `mps_built=true` 但不可用，先排查当前命令执行沙箱/Metal 权限；使用宿主提供的正常授权流程，在可访问本机 GPU 的执行环境中重试预检，不自行绕过沙箱。不能据此直接认定这台 Mac 不支持 GPU，也不要未经说明就启动耗时 CPU 分离。仍不可用时报告原因，明确用户是否要求 GPU；明确要求 GPU 的任务使用 `--device mps`，不可访问或推理失败即报错。普通任务可使用默认 `--device auto` 优先 MPS 并允许明确告知后的 CPU 回退。无需让用户填写设备参数。
+
+按批次顺序处理，每个模型在独立子进程中加载与释放。默认 auto 优先 MPS；设备不可用或 MPS 推理失败时明确说明 CPU 回退及原因。显式 `--device mps` 不会将整任务自动回退 CPU。运行开始时会显示执行设备，JSON `runtime.device` 和 `runtime.precision` 记录模型真实设备与精度；确认报告的设备，不能把 CPU 处理说成 GPU 加速。读取脚本 JSON 的 `success`、`notices` 和 `validation`，退出码非零或任一失败项都不能报告全部成功。内部运行日志留在临时文件，不向用户粘贴长日志；失败时保留原因的简要说明。
 
 默认沿用源文件格式、采样率、声道及可读取的 PCM 位深或音频码率；可显式输出 WAV、FLAC、MP3、M4A 或 AIFF。MP3/AAC 需要重新编码，按源平均码率尽量匹配，不能完全复刻 VBR 控制或私有编码参数；码率未知时使用 192 kbps。M4A 源为 ALAC 时保留 ALAC；FLAC 导出支持 16/24-bit。不要将 MP3/AAC 输出称作无损。两模型训练采样率均为 44.1 kHz，其他采样率需要内部重采样并恢复到原采样率，此时告知用户；恢复采样率不代表恢复模型未保留的高频。单声道内部双声道推理后恢复单声道；多于两声道明确报告不支持。
 

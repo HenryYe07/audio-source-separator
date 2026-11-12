@@ -69,11 +69,35 @@ def bootstrap():
 
 def device_status():
     import torch
+    built = torch.backends.mps.is_built()
     available = torch.backends.mps.is_available()
+    probe_error = None
+    if available:
+        try:
+            # Availability alone does not prove this process can submit a Metal operation.
+            with torch.inference_mode():
+                sample = torch.ones((8, 8), device='mps')
+                product = sample @ sample
+                torch.mps.synchronize()
+                if product.device.type != 'mps' or product[0, 0].item() != 8:
+                    raise RuntimeError('MPS 矩阵运算检查未通过')
+                del sample, product
+        except Exception as exc:
+            available = False
+            probe_error = str(exc)
+    if available:
+        reason = 'MPS GPU 矩阵运算实测通过'
+    elif probe_error:
+        reason = 'MPS 可检测但 GPU 运算失败：' + probe_error
+    elif built:
+        reason = ('PyTorch 含 MPS 支持，但当前进程无法访问 GPU；可能受执行沙箱、Metal 访问权限或系统环境限制。'
+                  '请在本机终端或宿主允许访问 GPU 的执行环境中重新运行 setup.py；不要直接判定硬件不支持。')
+    else:
+        reason = '当前 PyTorch 未编译 MPS 支持；需要原生 arm64、支持 MPS 的 PyTorch。'
     return {'platform': platform.platform(), 'machine': platform.machine(), 'torch': torch.__version__,
-            'mps_built': torch.backends.mps.is_built(), 'mps_available': available,
+            'mps_built': built, 'mps_available': available, 'mps_compute_verified': available,
             'device': 'mps' if available else 'cpu',
-            'reason': 'MPS 可用' if available else 'MPS 不可用：检查原生 arm64 PyTorch、macOS 和 Metal 支持；将使用 CPU。'}
+            'reason': reason}
 
 if __name__ == '__main__':
     argparse.ArgumentParser(description=__doc__).parse_args()

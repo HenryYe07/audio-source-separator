@@ -69,6 +69,9 @@ def worker(key, source, output, device):
         torch.mps.set_per_process_memory_fraction(.55)
     started = time.monotonic()
     instance = load_separator(key, device, output)
+    model_device = next(instance.model_run.parameters()).device
+    if model_device.type != device:
+        raise RuntimeError(f'模型实际设备 {model_device} 与要求的 {device} 不符')
     max_mps_driver_bytes = 0
     cfg = instance.model_data_cfgdict
     rate = int(cfg.audio.get('sample_rate', 44100))
@@ -110,6 +113,7 @@ def worker(key, source, output, device):
             if device == 'mps':
                 torch.mps.empty_cache()
     (output / 'metrics.json').write_text(json.dumps({'seconds': time.monotonic() - started,
+        'device': str(model_device), 'precision': str(next(instance.model_run.parameters()).dtype),
         'max_rss_bytes': resource.getrusage(resource.RUSAGE_SELF).ru_maxrss,
         'mps_driver_bytes_observed_after_blocks': max_mps_driver_bytes}))
 
@@ -131,11 +135,11 @@ def process(source, key, base, requested_device, output_format='source'):
         raise ValueError('当前模型仅可靠支持单声道和立体声；多声道输入需要另行确认转换。')
     if not 8000 <= info['sample_rate'] <= 384000 or info['duration'] <= 0:
         raise ValueError('输入采样率或时长异常')
-    ensure_model(key)
     status = device_status()
     device = status['device'] if requested_device == 'auto' else requested_device
     if device == 'mps' and not status['mps_available']:
         raise RuntimeError(status['reason'])
+    ensure_model(key)
     notices = list(spec['notices'])
     if requested_device == 'auto' and device == 'cpu':
         notices.append(status['reason'])
@@ -154,7 +158,7 @@ def process(source, key, base, requested_device, output_format='source'):
                 command = [sys.executable, str(Path(__file__).resolve()), '--worker', key,
                     str(decoded), str(raw), device]
                 result = subprocess.run(command, stdout=stream, stderr=stream)
-                if result.returncode and device == 'mps':
+                if result.returncode and device == 'mps' and requested_device == 'auto':
                     cause = log.read_text()[-2400:]
                     # Retry only device/memory failures; a damaged model is not a GPU error.
                     if any(t in cause.lower() for t in ('mps', 'metal', 'out of memory', 'not implemented')):
@@ -198,7 +202,8 @@ def main():
     p.add_argument('--goal', choices=['detail', 'clean', 'both'])
     p.add_argument('--model', choices=['detail', 'clean', 'both'], help='明确指定模型，优先于 goal')
     p.add_argument('--output', type=Path, help='输出根目录')
-    p.add_argument('--device', choices=['auto', 'mps', 'cpu'], default='auto')
+    p.add_argument('--device', choices=['auto', 'mps', 'cpu'], default='auto',
+                   help='auto 优先 MPS 并允许回退；mps 要求 GPU，失败时报错而不整任务回退 CPU')
     p.add_argument('--format', choices=FORMATS, type=str.lower, default='source',
                    help='输出格式，默认 source：沿用每个源文件的格式和可读取的音频参数')
     args = p.parse_args()
@@ -217,6 +222,11 @@ def main():
             raise ValueError('没有找到支持的音频文件')
         bootstrap()
         os.environ.setdefault('PYTORCH_ENABLE_MPS_FALLBACK', '1')
+        status = device_status()
+        if args.device == 'mps' and not status['mps_available']:
+            raise RuntimeError(status['reason'])
+        selected_device = status['device'] if args.device == 'auto' else args.device
+        print(f'执行设备：{selected_device}。{status["reason"] if args.device != "cpu" else "用户明确选择 CPU"}', file=sys.stderr, flush=True)
         failures = 0
         # Serial jobs and child processes keep at most one large model resident.
         with lock(ROOT / '.inference.lock'):

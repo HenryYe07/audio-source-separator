@@ -15,7 +15,7 @@ SHA-256 提取自 `audio-separator==0.48.0` 官方 PyPI wheel 内的 `audio_sepa
 
 推理复用上游 [MDXCSeparator.demix](https://github.com/nomadkaraoke/python-audio-separator/blob/main/audio_separator/separator/architectures/mdxc_separator.py)，用受限的本地 Separator 子类加载模型，绕过上游在线目录。直接 demix 避免上游默认峰值归一化；伴奏来自模型、人声为混音残差。流式磁盘处理每次 30 秒核心加左右各两模型窗口上下文，保留核心并拼接；这控制长文件缓冲区，不能保证与整首一次推理逐采样相同。长曲拼接听感需要另行评估。
 
-MPS 通过 PyTorch 实测检测；设置单进程 MPS 分配上限为推荐工作集的 55%，并按块清空缓存。统一内存还由系统、CPU 和其他应用共享，因此不能对任意输入和系统负载承诺总内存严格小于 16 GB；MPS 内存不足时释放整个子进程并重试 CPU，不缩短训练窗口。`PYTORCH_ENABLE_MPS_FALLBACK=1` 允许部分不支持算子在 CPU 执行，整任务的 MPS 异常另有 CPU 重试。CPU 可能明显更慢。
+MPS 预检实际提交 GPU 矩阵运算，并核对模型实际驻留设备；受限 Agent 命令沙箱可能返回 MPS 不可用，同一安装在具备正常本机 GPU 权限的执行环境中可以通过。设置单进程 MPS 分配上限为推荐工作集的 55%，并按块清空缓存。统一内存还由系统、CPU 和其他应用共享，因此不能对任意输入和系统负载承诺总内存严格小于 16 GB。默认 auto 在 MPS 内存不足时释放整个子进程并重试 CPU，不缩短训练窗口；显式 `--device mps` 则报错，不将整任务回退 CPU。`PYTORCH_ENABLE_MPS_FALLBACK=1` 允许部分不支持算子在 CPU 执行。CPU 可能明显更慢。保持 float32，不默认切换低精度或启用模型编译。
 
 环境固定原生 Python 3.11、audio-separator[cpu] 0.48.0、PyTorch 2.13.0；cpu extra 安装的是 ONNX Runtime CPU 依赖，不会禁用 PyTorch MPS。上游包包含其他架构代码和依赖，但本工具不下载或调用其他模型。
 

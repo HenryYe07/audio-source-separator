@@ -49,7 +49,20 @@ python3.11 "$HOME/.agents/skills/audio-source-separator/scripts/setup.py"
 
 `setup.py` 会在 Skill 内创建独立 `.venv/`、安装锁定的 Python 依赖并检查 MPS。不会修改系统 Python 或卸载 UVR5。FFmpeg 缺失且已有 Homebrew 时，脚本会尝试自动安装；没有 Homebrew 时会报告缺失前提。无需手动激活虚拟环境。
 
-预检结果中的 `mps_available: true` 表示可使用 Apple GPU；不可用时会明确说明，默认处理可改用 CPU。
+预检会实际执行一次小型 MPS 矩阵运算；`mps_available: true`、`mps_compute_verified: true` 表示当前进程可以使用 Apple GPU。不可用时会说明原因，默认处理可改用 CPU。
+
+## GPU 加速
+
+默认 `--device auto` 优先使用 Apple Silicon 的 MPS GPU，允许失败后回退 CPU，并报告原因。希望明确要求 GPU 时，使用：
+
+```bash
+python3.11 "$HOME/.agents/skills/audio-source-separator/scripts/separate.py" \
+  "/absolute/path/song.mp3" --goal clean --device mps
+```
+
+`--device mps` 在 GPU 不可用或推理失败时直接报错，避免整首歌悄悄用 CPU 运行。开始处理时会显示所选设备；成功结果的 `runtime.device` 和 `runtime.precision` 记录模型真实所在设备与精度。MPS 保持 float32 精度，沿用模型训练窗口和重叠。
+
+如果预检显示 `mps_built: true` 但 `mps_available: false`，可能是当前 Agent 命令沙箱无法访问 Metal。请在本机终端运行同一预检，或让 Agent 通过宿主允许的本机 GPU 执行权限重试；这不一定是硬件或安装问题。只有远程 Linux 沙箱时无法调用本机 MPS。`--device mps` 要求模型驻留 GPU，PyTorch 个别不支持的算子仍可能按其机制在 CPU 执行。
 
 ## 模型下载与存放
 

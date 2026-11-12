@@ -18,6 +18,43 @@ from validate_audio import probe
 from audio_format import output_spec, encode
 
 class RuntimeTests(unittest.TestCase):
+    def test_mps_operation_failure_is_reported_by_preflight(self):
+        with patch('torch.backends.mps.is_built', return_value=True), \
+                patch('torch.backends.mps.is_available', return_value=True), \
+                patch('torch.ones', side_effect=RuntimeError('Metal permission denied')):
+            status = separation.device_status()
+        self.assertFalse(status['mps_available'])
+        self.assertFalse(status['mps_compute_verified'])
+        self.assertIn('Metal permission denied', status['reason'])
+
+    def test_forced_mps_never_silently_retries_entire_job_on_cpu(self):
+        original_run = subprocess.run
+        devices = []
+        def run(command, **kwargs):
+            if '--worker' not in command:
+                return original_run(command, **kwargs)
+            devices.append(command[-1])
+            kwargs['stderr'].write('MPS out of memory')
+            kwargs['stderr'].flush()
+            return subprocess.CompletedProcess(command, 1)
+        with tempfile.TemporaryDirectory() as directory:
+            directory = Path(directory)
+            source = directory / 'input.wav'
+            sf.write(source, np.zeros(44100), 44100)
+            with patch.object(separation, 'ensure_model'), \
+                    patch.object(separation, 'device_status', return_value={'device': 'mps', 'mps_available': True}), \
+                    patch.object(separation.subprocess, 'run', side_effect=run):
+                with self.assertRaisesRegex(RuntimeError, 'MPS out of memory'):
+                    separation.process(source, 'detail', directory / 'result', 'mps')
+            self.assertEqual(devices, ['mps'])
+            self.assertFalse((directory / 'result').exists())
+            with patch.object(separation, 'ensure_model') as ensure, \
+                    patch.object(separation, 'device_status', return_value={'device': 'cpu', 'mps_available': False,
+                                                                           'reason': 'GPU access blocked'}):
+                with self.assertRaisesRegex(RuntimeError, 'GPU access blocked'):
+                    separation.process(source, 'detail', directory / 'result', 'mps')
+                ensure.assert_not_called()
+
     def test_source_mp3_is_exported_and_checked_only_after_encoding(self):
         original_run = subprocess.run
         def run(command, **kwargs):
