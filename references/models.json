@@ -1,0 +1,44 @@
+{
+  "detail": {
+    "name": "MelBand Roformer Kim Inst V1 (E) Plus — unwa",
+    "checkpoint": "melband_roformer_inst_v1e_plus.ckpt",
+    "config": "config_melbandroformer_inst.yaml",
+    "files": {
+      "melband_roformer_inst_v1e_plus.ckpt": {
+        "sha256": "6a4ddba739f0352407fb6e18b29206b82318ec427fe37fcedb0f83241e4e15fb",
+        "urls": [
+          "https://github.com/nomadkaraoke/python-audio-separator/releases/download/model-configs/melband_roformer_inst_v1e_plus.ckpt",
+          "https://huggingface.co/Eddycrack864/audio-separator-models/resolve/main/roformers/melband_roformer_inst_v1e_plus.ckpt"
+        ]
+      },
+      "config_melbandroformer_inst.yaml": {
+        "sha256": "64c0cf23730f299c9c73470e4ba4b32120d8fec4fb1a0326dde1d61378cc6fc8",
+        "urls": [
+          "https://github.com/nomadkaraoke/python-audio-separator/releases/download/model-configs/config_melbandroformer_inst.yaml",
+          "https://huggingface.co/Eddycrack864/audio-separator-models/resolve/main/roformers/config_melbandroformer_inst.yaml"
+        ]
+      }
+    }
+  },
+  "clean": {
+    "name": "BS Roformer Instrumental Resurrection — unwa",
+    "checkpoint": "bs_roformer_instrumental_resurrection_unwa.ckpt",
+    "config": "config_bs_roformer_instrumental_resurrection_unwa.yaml",
+    "files": {
+      "bs_roformer_instrumental_resurrection_unwa.ckpt": {
+        "sha256": "16311025a5133ae6411760ccfe9e3e66b31a01d9d8bec0a03fa7ec4bedac7a15",
+        "urls": [
+          "https://github.com/nomadkaraoke/python-audio-separator/releases/download/model-configs/bs_roformer_instrumental_resurrection_unwa.ckpt",
+          "https://huggingface.co/Eddycrack864/audio-separator-models/resolve/main/roformers/bs_roformer_instrumental_resurrection_unwa.ckpt"
+        ]
+      },
+      "config_bs_roformer_instrumental_resurrection_unwa.yaml": {
+        "sha256": "d28c16f35e3118c8db3b5b28320d70e3fbb7ab46ab1ff1e60e0332b1e5871ba1",
+        "urls": [
+          "https://github.com/nomadkaraoke/python-audio-separator/releases/download/model-configs/config_bs_roformer_instrumental_resurrection_unwa.yaml",
+          "https://huggingface.co/Eddycrack864/audio-separator-models/resolve/main/roformers/config_bs_roformer_instrumental_resurrection_unwa.yaml"
+        ]
+      }
+    }
+  }
+}

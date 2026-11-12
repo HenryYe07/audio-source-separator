@@ -1,0 +1,6 @@
+interface:
+  display_name: "音乐人声与伴奏分离"
+  short_description: "在 Apple Silicon Mac 本机按扒谱或翻唱偏好分离无损伴奏和人声"
+  default_prompt: "使用 $audio-source-separator 处理我的音频，先按已说明的用途选择分离目标。"
+policy:
+  allow_implicit_invocation: true
